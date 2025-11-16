@@ -1,115 +1,44 @@
 import streamlit as st
-import subprocess
 import os
+import sys
 import pandas as pd
 from datetime import datetime, timedelta
 import json
+import asyncio
 
 st.set_page_config(layout="wide", page_title="Merchant Agent Dashboard")
 
 st.title("🏪 Merchant Agent Dashboard")
 st.markdown("*Demand forecasting & purchase recommendations powered by AI*")
 
-SERVER_PATH = os.path.join(os.path.dirname(__file__), "server.py")
-PYTHON_EXE = sys.executable
-
-@st.cache_resource
-def get_server_subprocess():
-    """Start the MCP server as a subprocess."""
-    proc = subprocess.Popen(
-        [PYTHON_EXE, SERVER_PATH],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    return proc
-
-# Start server in background
-server_proc = get_server_subprocess()
+# Import server functions directly (avoids subprocess issues on Windows/Streamlit Cloud)
+try:
+    import server as local_server
+    # Ensure artifacts are loaded
+    if getattr(local_server, 'MODEL', None) is None:
+        local_server.load_artifacts()
+    SERVER_AVAILABLE = True
+except Exception as e:
+    st.error(f"Failed to load server: {e}")
+    SERVER_AVAILABLE = False
 
 def call_mcp_tool(tool_name: str, params: dict):
-    """Call an MCP tool via the client subprocess."""
+    """Call an MCP tool by invoking local server functions."""
+    if not SERVER_AVAILABLE:
+        return {"error": "Server not available"}
+    
     try:
-        # Use client.py to call the tool
-        result = subprocess.run(
-            [PYTHON_EXE, "-c", f"""
-import asyncio
-import sys
-from contextlib import AsyncExitStack
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-import json
-
-async def main():
-    async with AsyncExitStack() as stack:
-        server_params = StdioServerParameters(command='{PYTHON_EXE}', args=['{SERVER_PATH}'])
-        stdio_transport = await stack.enter_async_context(stdio_client(server_params))
-        stdio, write = stdio_transport
-        session = await stack.enter_async_context(ClientSession(stdio, write))
-        await session.initialize()
-        result = await session.call_tool('{tool_name}', {json.dumps(params)})
-        def safe(obj):
-            # Convert common objects to JSON-serializable structures
-            if obj is None or isinstance(obj, (str, int, float, bool)):
-                return obj
-            if isinstance(obj, dict):
-                return {{k: safe(v) for k, v in obj.items()}}
-            if isinstance(obj, list):
-                return [safe(v) for v in obj]
-            # Fallback: try to extract .content or .text attributes, then str()
-            if hasattr(obj, 'content'):
-                return safe(getattr(obj, 'content'))
-            if hasattr(obj, 'text'):
-                return safe(getattr(obj, 'text'))
-            try:
-                return str(obj)
-            except Exception:
-                return None
-
+        if tool_name == 'predict_demand':
+            result = asyncio.run(local_server.predict_demand(**params))
+        elif tool_name == 'recommend_purchase':
+            result = asyncio.run(local_server.recommend_purchase(**params))
+        else:
+            return {"error": f"Unknown tool: {tool_name}"}
+        
+        # Normalize result (handle MCP TextContent wrapper)
         if hasattr(result, 'content'):
-            print(json.dumps(safe(result.content)))
-        else:
-            print(json.dumps({{"error": "No content in result"}}))
-
-asyncio.run(main())
-"""],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode == 0 and result.stdout:
-            try:
-                parsed = json.loads(result.stdout)
-            except Exception:
-                # If stdout is not pure JSON, return raw text
-                return {"error": f"Invalid JSON from tool: {result.stdout.strip()}"}
-
-            # normalize possible wrappers (e.g., list with one JSON-string)
-            def normalize(obj):
-                if isinstance(obj, list):
-                    if len(obj) == 0:
-                        return obj
-                    if len(obj) == 1:
-                        item = obj[0]
-                        # if item is a JSON-encoded string, try to decode
-                        if isinstance(item, str):
-                            try:
-                                return json.loads(item)
-                            except Exception:
-                                return item
-                        return item
-                    # multiple items: try to normalize each
-                    return [normalize(i) for i in obj]
-                if isinstance(obj, str):
-                    try:
-                        return json.loads(obj)
-                    except Exception:
-                        return obj
-                return obj
-
-            return normalize(parsed)
-        else:
-            return {"error": f"Tool call failed: {result.stderr}"}
+            return result.content
+        return result
     except Exception as e:
         return {"error": str(e)}
 
