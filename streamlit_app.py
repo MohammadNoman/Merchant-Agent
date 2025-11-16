@@ -53,7 +53,7 @@ async def main():
             if obj is None or isinstance(obj, (str, int, float, bool)):
                 return obj
             if isinstance(obj, dict):
-                return {k: safe(v) for k, v in obj.items()}
+                return {{k: safe(v) for k, v in obj.items()}}
             if isinstance(obj, list):
                 return [safe(v) for v in obj]
             # Fallback: try to extract .content or .text attributes, then str()
@@ -69,7 +69,7 @@ async def main():
         if hasattr(result, 'content'):
             print(json.dumps(safe(result.content)))
         else:
-            print(json.dumps({"error": "No content in result"}))
+            print(json.dumps({{"error": "No content in result"}}))
 
 asyncio.run(main())
 """],
