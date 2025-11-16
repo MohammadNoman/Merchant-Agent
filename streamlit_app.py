@@ -11,7 +11,7 @@ st.title("🏪 Merchant Agent Dashboard")
 st.markdown("*Demand forecasting & purchase recommendations powered by AI*")
 
 SERVER_PATH = os.path.join(os.path.dirname(__file__), "server.py")
-PYTHON_EXE = "python"
+PYTHON_EXE = sys.executable
 
 @st.cache_resource
 def get_server_subprocess():
