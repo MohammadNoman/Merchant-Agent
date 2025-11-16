@@ -78,7 +78,36 @@ asyncio.run(main())
             timeout=30,
         )
         if result.returncode == 0 and result.stdout:
-            return json.loads(result.stdout)
+            try:
+                parsed = json.loads(result.stdout)
+            except Exception:
+                # If stdout is not pure JSON, return raw text
+                return {"error": f"Invalid JSON from tool: {result.stdout.strip()}"}
+
+            # normalize possible wrappers (e.g., list with one JSON-string)
+            def normalize(obj):
+                if isinstance(obj, list):
+                    if len(obj) == 0:
+                        return obj
+                    if len(obj) == 1:
+                        item = obj[0]
+                        # if item is a JSON-encoded string, try to decode
+                        if isinstance(item, str):
+                            try:
+                                return json.loads(item)
+                            except Exception:
+                                return item
+                        return item
+                    # multiple items: try to normalize each
+                    return [normalize(i) for i in obj]
+                if isinstance(obj, str):
+                    try:
+                        return json.loads(obj)
+                    except Exception:
+                        return obj
+                return obj
+
+            return normalize(parsed)
         else:
             return {"error": f"Tool call failed: {result.stderr}"}
     except Exception as e:
