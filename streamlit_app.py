@@ -1,3 +1,4 @@
+import sys
 import streamlit as st
 import subprocess
 import os
@@ -12,6 +13,19 @@ st.markdown("*Demand forecasting & purchase recommendations powered by AI*")
 
 SERVER_PATH = os.path.join(os.path.dirname(__file__), "server.py")
 PYTHON_EXE = sys.executable
+
+# If `server.py` is importable in this environment, prefer calling its functions
+# directly instead of spawning subprocesses. This is required on hosted Streamlit
+# (Streamlit Cloud) where starting background subprocesses is restricted.
+USE_LOCAL_SERVER = False
+try:
+    import server as local_server
+    # ensure artifacts are loaded
+    if getattr(local_server, 'MODEL', None) is None:
+        local_server.load_artifacts()
+    USE_LOCAL_SERVER = True
+except Exception:
+    USE_LOCAL_SERVER = False
 
 @st.cache_resource
 def get_server_subprocess():
@@ -29,6 +43,22 @@ server_proc = get_server_subprocess()
 
 def call_mcp_tool(tool_name: str, params: dict):
     """Call an MCP tool via the client subprocess."""
+    # If local server functions are available, call them directly (avoids subprocesses on hosted Streamlit).
+    if 'USE_LOCAL_SERVER' in globals() and USE_LOCAL_SERVER:
+        try:
+            if tool_name == 'predict_demand':
+                res = __import__('asyncio').run(local_server.predict_demand(**params))
+                if hasattr(res, 'content'):
+                    return res.content
+                return res
+            if tool_name == 'recommend_purchase':
+                res = __import__('asyncio').run(local_server.recommend_purchase(**params))
+                if hasattr(res, 'content'):
+                    return res.content
+                return res
+        except Exception as e:
+            return {"error": f"Local server call failed: {e}"}
+
     try:
         # Use client.py to call the tool
         result = subprocess.run(
