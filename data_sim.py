@@ -7,9 +7,9 @@ def simulate_sales(start="2021-01-01", end="2024-12-31", products=None, seed=42)
     np.random.seed(seed)
     if products is None:
         products = [
-            {"id": "P1", "name": "T-Shirt", "seasonality": [0,0,0,0,0.2,0.6,0.9,0.8,0.3,0,0,0]}, # summer peak
-            {"id": "P2", "name": "Jacket", "seasonality": [0.8,0.9,0.7,0.4,0.1,0,0,0,0,0.3,0.7,0.9]}, # winter peak
-            {"id": "P3", "name": "Umbrella", "seasonality": [0.4,0.6,0.6,0.6,0.5,0.3,0.2,0.3,0.6,0.7,0.6,0.5]} # rainy months
+            {"id": "T-Shirt", "name": "T-Shirt", "seasonality": [0,0,0,0,0.2,0.6,0.9,0.8,0.3,0,0,0]}, # summer peak
+            {"id": "Jeans", "name": "Jeans", "seasonality": [0.8,0.9,0.7,0.4,0.1,0,0,0,0,0.3,0.7,0.9]}, # winter peak
+            {"id": "Trousers", "name": "Trousers", "seasonality": [0.4,0.6,0.6,0.6,0.5,0.3,0.2,0.3,0.6,0.7,0.6,0.5]} # rainy months
         ]
 
     dates = pd.date_range(start, end, freq="D")
