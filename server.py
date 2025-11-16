@@ -42,10 +42,23 @@ async def predict_demand(product_id: str, start_date: str, periods: int = 14) ->
     lag_7 = int(last_sales[-7]) if len(last_sales)>7 else int(lag_1)
     rolling_30 = float(sum(last_sales)/len(last_sales))
     out_dates=[]
+    # prepare column names that the model expects
+    feature_cols = ['product_code','month','day','lag_1','lag_7','rolling_30','promo']
     for i in range(periods):
         cur_date = start + pd.Timedelta(days=i)
-        Xrow = [[product_code, cur_date.month, cur_date.day, lag_1, lag_7, rolling_30, 1.0]] # assume promo=1.0 default
-        pred = float(max(0, MODEL.predict(Xrow)[0]))
+        Xrow_df = pd.DataFrame([
+            {
+                'product_code': int(product_code),
+                'month': int(cur_date.month),
+                'day': int(cur_date.day),
+                'lag_1': float(lag_1),
+                'lag_7': float(lag_7),
+                'rolling_30': float(rolling_30),
+                'promo': float(1.0),
+            }
+        ], columns=feature_cols)
+        # pass a DataFrame with matching column names to avoid sklearn feature-name warnings
+        pred = float(max(0, MODEL.predict(Xrow_df)[0]))
         preds.append(round(pred))
         out_dates.append(cur_date.strftime("%Y-%m-%d"))
         # update lags for next iteration (simple)

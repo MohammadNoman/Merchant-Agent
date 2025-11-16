@@ -48,10 +48,28 @@ async def main():
         session = await stack.enter_async_context(ClientSession(stdio, write))
         await session.initialize()
         result = await session.call_tool('{tool_name}', {json.dumps(params)})
+        def safe(obj):
+            # Convert common objects to JSON-serializable structures
+            if obj is None or isinstance(obj, (str, int, float, bool)):
+                return obj
+            if isinstance(obj, dict):
+                return {k: safe(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [safe(v) for v in obj]
+            # Fallback: try to extract .content or .text attributes, then str()
+            if hasattr(obj, 'content'):
+                return safe(getattr(obj, 'content'))
+            if hasattr(obj, 'text'):
+                return safe(getattr(obj, 'text'))
+            try:
+                return str(obj)
+            except Exception:
+                return None
+
         if hasattr(result, 'content'):
-            print(json.dumps(result.content))
+            print(json.dumps(safe(result.content)))
         else:
-            print(json.dumps({{"error": "No content in result"}}))
+            print(json.dumps({"error": "No content in result"}))
 
 asyncio.run(main())
 """],
